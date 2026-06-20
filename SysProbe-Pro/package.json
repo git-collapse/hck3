@@ -1,0 +1,39 @@
+{
+  "name": "sysprobe-pro",
+  "version": "1.0.0",
+  "description": "A professional, secure developer utility for system info, environment inspection, and project analysis.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "system": "node src/index.js system",
+    "scan": "node src/index.js scan",
+    "report": "node src/index.js report",
+    "help": "node src/index.js --help",
+    "version": "node src/index.js --version",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write \"src/**/*.js\""
+  },
+  "author": "Principal Software Architect",
+  "keywords": [
+    "cli",
+    "system-info",
+    "developer-tool",
+    "security",
+    "scanner",
+    "analyzer"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "boxen": "^8.0.1",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^15.0.0",
+    "figlet": "^1.11.0",
+    "fs-extra": "^11.3.5",
+    "inquirer": "^14.0.2",
+    "mime-types": "^3.0.2",
+    "ora": "^9.4.0"
+  }
+}
