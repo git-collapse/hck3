@@ -19,23 +19,23 @@ SysProbe Pro transforms your local telemetry and project metadata into beautiful
 
 SysProbe Pro is packed with powerful modules designed for performance, security, and developer ergonomics:
 
-| Feature                   | Description                                                                           |
-| :------------------------ | :------------------------------------------------------------------------------------ |
-| **System Information**    | Gathers comprehensive OS, Node.js, network, CPU, and memory telemetry.                |
-| **Environment Analysis**  | Inspects local variables and critical environment setups safely.                      |
-| **CRUD Operations**       | A sandboxed filesystem manager built directly into the CLI.                           |
-| **Project Scanner**       | Traverses local repositories to identify project types, sizes, and file metadata.     |
-| **AI Advisor**            | A deterministic, offline rules-engine translating raw telemetry into actionable text. |
-| **Doctor Diagnostics**    | Heuristic evaluation of your system yielding a Health Grade (A+ to F).                |
-| **Live Monitor**          | Real-time CLI performance tracker with historical sparklines.                         |
-| **Interactive Dashboard** | A flicker-free, `btop`-style full-screen UI with dynamic overlays.                    |
-| **Professional Reports**  | Builder patterns to export data beautifully to your hard drive.                       |
-| **JSON Export**           | Machine-readable outputs for CI/CD ingestion.                                         |
-| **HTML Export**           | Standalone, visually stunning offline browser reports.                                |
-| **Markdown Export**       | GitHub-friendly snapshots of your system state.                                       |
-| **Health Score**          | Aggregated telemetry converted into a readable metric out of 100.                     |
-| **Security Analysis**     | Static identification of hardcoded secrets or unencrypted keys in source code.        |
-| **Recommendations**       | Context-aware suggestions targeting memory overload, unformatted code, etc.           |
+| Feature | Description |
+| :--- | :--- |
+| **System Information** | Gathers comprehensive OS, Node.js, network, CPU, and memory telemetry. |
+| **Environment Analysis** | Inspects local variables and critical environment setups safely. |
+| **CRUD Operations** | A sandboxed filesystem manager built directly into the CLI. |
+| **Project Scanner** | Traverses local repositories to identify project types, sizes, and file metadata. |
+| **AI Advisor** | A deterministic, offline rules-engine translating raw telemetry into actionable text. |
+| **Doctor Diagnostics** | Heuristic evaluation of your system yielding a Health Grade (A+ to F). |
+| **Live Monitor** | Real-time CLI performance tracker with historical sparklines. |
+| **Interactive Dashboard** | A flicker-free, `btop`-style full-screen UI with dynamic overlays. |
+| **Professional Reports** | Builder patterns to export data beautifully to your hard drive. |
+| **JSON Export** | Machine-readable outputs for CI/CD ingestion. |
+| **HTML Export** | Standalone, visually stunning offline browser reports. |
+| **Markdown Export** | GitHub-friendly snapshots of your system state. |
+| **Health Score** | Aggregated telemetry converted into a readable metric out of 100. |
+| **Security Analysis** | Static identification of hardcoded secrets or unencrypted keys in source code. |
+| **Recommendations** | Context-aware suggestions targeting memory overload, unformatted code, etc. |
 
 ---
 
@@ -62,7 +62,6 @@ sysprobe-pro/
 ```
 
 ### Responsibilities
-
 - **`services/`**: The pure data layer. Fetches hardware specs and OS metrics.
 - **`analyzers/` & `advisor/`**: The brain layer. Processes raw data into heuristics.
 - **`dashboard/` & `monitor/`**: The presentation layer. Paints raw data into the terminal buffer.
@@ -76,39 +75,39 @@ Understanding how SysProbe Pro executes a request is critical to maintaining the
 
 1. **User runs command**  
    The user triggers the application via the terminal (e.g., `npm start -- dashboard`).
-
+   
    **↓**
-
+   
 2. **CLI parses command**  
    `src/index.js` bootstraps the app, displays the initial branding banner, and passes standard input arguments to `src/cli.js`.
-
+   
    **↓**
-
+   
 3. **Command router**  
    `commander` identifies the target action, parsing any options (`--json`, `--html`). It then uses a dynamic `import()` to lazy-load the appropriate command execution module, ensuring lightning-fast boot times.
-
+   
    **↓**
-
+   
 4. **Service layer**  
    The execution module calls `src/services/systemService.js` (or similar) to pull low-level OS data directly from Node's `os` and `process` modules.
-
+   
    **↓**
-
+   
 5. **Analysis engine**  
    The raw telemetry is handed off to an analyzer (e.g., `doctorService.js` or `knowledgeEngine.js`). Here, hardcoded thresholds generate grades, scores, and natural language recommendations.
-
+   
    **↓**
-
+   
 6. **Formatter**  
    Data is processed through `src/utils/formatter.js` to convert raw byte sizes into human-readable strings (MB, GB), format dates, and safely mask sensitive values.
-
+   
    **↓**
-
+   
 7. **Renderer**  
    The presentation module (e.g., `DashboardRenderer`, `reportBuilder.js`) wraps the formatted data into dynamic UI components using `chalk` or Unicode box drawing characters.
-
+   
    **↓**
-
+   
 8. **Output**  
    The final payload is either written to the terminal buffer (`process.stdout.write`) or saved directly to the disk (`fs.writeFileSync`).
 
@@ -119,7 +118,7 @@ Understanding how SysProbe Pro executes a request is critical to maintaining the
 SysProbe Pro is engineered with the following core principles:
 
 - **Modularity**: Every feature is isolated in its own domain directory. If the interactive dashboard breaks, the static scanner remains entirely unaffected.
-- **Separation of Concerns**: The CLI file `cli.js` knows _nothing_ about how to calculate a CPU load. It only knows how to route the request to the `MonitorService`.
+- **Separation of Concerns**: The CLI file `cli.js` knows *nothing* about how to calculate a CPU load. It only knows how to route the request to the `MonitorService`.
 - **Error Handling**: Wrapped in a global `try/catch` and process event listeners (`uncaughtException`). Errors are swallowed gracefully, logged silently to `logs/app.log`, and present the user with a clean, friendly terminal message rather than a terrifying stack trace.
 - **Extensibility**: Because data fetching (`SystemService`) is separated from the AI Engine (`KnowledgeEngine`), adding a new cloud integration or a new diagnostic rule requires modifying only a single file.
 - **Scalability**: Capable of handling massive repositories without crashing by using asynchronous polling and aggressive try-catch fallbacks during file traversal.
@@ -140,55 +139,43 @@ npm install
 
 ## 💻 Usage
 
-SysProbe Pro features 10 distinct operational modes.
+SysProbe Pro features 10 distinct operational modes. 
 
 > **Note**: You can access detailed help for any command by appending `--help`.
 
 ### `system`
-
 Collect and display comprehensive hardware and OS information.
-
 ```bash
 npm start -- system
 npm start -- system --json
 ```
 
 ### `doctor`
-
 Analyze your hardware constraints and Node.js environment to generate a system health grade.
-
 ```bash
 npm start -- doctor
 ```
 
 ### `monitor`
-
 Launch the legacy live-polling widget with dynamic historical sparklines.
-
 ```bash
 npm start -- monitor
 ```
 
 ### `dashboard`
-
 Launch the premium, flicker-free, interactive `btop`-style dashboard.
-
 ```bash
 npm start -- dashboard
 ```
 
 ### `scan`
-
 Traverse your local workspace to detect frameworks, code quality, and potential security leaks.
-
 ```bash
 npm start -- scan
 ```
 
 ### `report`
-
 Generate gorgeous offline summaries of your entire hardware and project ecosystem.
-
 ```bash
 npm start -- report --html
 npm start -- report --md
@@ -196,33 +183,25 @@ npm start -- report --json
 ```
 
 ### `env`
-
 Safely inspect local variables without exposing your raw private keys.
-
 ```bash
 npm start -- env
 ```
 
 ### `crud`
-
 Perform simple local file system operations inside a safe sandbox.
-
 ```bash
 npm start -- crud
 ```
 
 ### `health`
-
 Run a rapid synthetic health check against the application daemon.
-
 ```bash
 npm start -- health
 ```
 
 ### `ai`
-
 Leverage the offline heuristic engine to read natural language advice regarding your computer.
-
 ```bash
 npm start -- ai
 ```
@@ -232,7 +211,6 @@ npm start -- ai
 ## 🖥️ Output Examples
 
 **Doctor Command Output:**
-
 ```text
 ================================================
                SYSTEM DOCTOR
@@ -260,7 +238,6 @@ npm start -- ai
 ```
 
 **AI Advisor Output:**
-
 ```text
 ┌ Health Score
 │ Status: Good
