@@ -14,8 +14,8 @@ import { formatBytesInMBGB, formatUptime, formatDate, safeValue, generateProgres
 import { stripColors } from '../utils/helper.js';
 
 import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json');
+const _require = createRequire(import.meta.url);
+const _pkg = _require('../../package.json');
 
 export default async function(options = {}) {
   const t0 = performance.now();
@@ -63,7 +63,7 @@ function saveReportsAutomatically(info, reportStr) {
 
   const reportData = {
     timestamp: new Date().toISOString(),
-    version: pkg.version,
+    version: _pkg.version,
     executionTimeMs: info.executionTimeMs,
     healthSummary: info.health,
     collectedInformation: info
@@ -76,10 +76,6 @@ function saveReportsAutomatically(info, reportStr) {
   // Save TXT
   const txtPath = path.resolve(reportDir, 'system-report.txt');
   fs.writeFileSync(txtPath, stripColors(reportStr) + '\n' + stripColors(getFooterString(info.executionTimeMs)));
-  
-  // Only log if not printing json
-  // Wait, the prompt says "When --json flag is passed, print the full JSON report to stdout AND still save to file. Remove the blank-output behavior."
-  // But if I print Logger.info when --json is passed, it might break JSON parsing. Better to avoid it.
   
   return reportData;
 }
@@ -95,7 +91,7 @@ ${Theme.dim('━━━━━━━━━━━━━━━━━━━━━━�
 ${Theme.success.bold('Report Generated Successfully')}
 ${Theme.primary('Execution Time')} : ${execTimeMs} ms
 ${Theme.primary('Generated At')}   : ${timeStr}
-${Theme.secondary(`SysProbe Pro v${pkg.version}`)}
+${Theme.secondary(`SysProbe Pro v${_pkg.version}`)}
 ${Theme.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 `;
 }
@@ -126,7 +122,7 @@ function buildCLIReportString(info) {
   const cpu = info.cpu;
   cpuTable.push(
     ['CPU Model', Theme.primary(safeValue(cpu.model))],
-    ['CPU Cores', `${cpu.count} (Logical Threads)`],
+    ['CPU Cores', `${cpu.count} logical threads`],
     ['Architecture', safeValue(cpu.architecture)],
     ['Speed (MHz)', safeValue(cpu.speed)],
     ['Load Average', safeValue(cpu.loadAverage)]
@@ -190,30 +186,29 @@ function buildCLIReportString(info) {
   output += Theme.primary.bold('>> HEALTH SUMMARY') + '\n';
   output += healthTable.toString() + '\n';
 
-  // Environment Section
-  const envKeys = ['NODE_ENV', 'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TERM', 'EDITOR', 'HOSTNAME', 'COMPUTERNAME', 'OS', 'USERPROFILE', 'APPDATA', 'TEMP', 'TMP'];
-  const envTable = createTable(['Variable', 'Value']);
+  // Environment Variables Section
   const SENSITIVE = /token|secret|password|passwd|key|api|auth|credential/i;
-  let hasEnv = false;
-
-  for (const key of envKeys) {
-    if (key in process.env) {
-      hasEnv = true;
-      let val = process.env[key];
-      if (SENSITIVE.test(key)) {
-        val = Theme.warning('[REDACTED]');
-      } else if (key === 'PATH' && val.length > 80) {
-        val = val.substring(0, 80) + '...';
-      }
-      envTable.push([Theme.primary(key), Theme.dim(val)]);
+  const ENV_KEYS = [
+    'NODE_ENV', 'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TERM',
+    'HOSTNAME', 'COMPUTERNAME', 'OS', 'USERPROFILE', 'APPDATA', 'TEMP', 'TMP'
+  ];
+  const envTable = createTable(['Variable', 'Value']);
+  for (const key of ENV_KEYS) {
+    if (!(key in process.env)) continue;
+    let val = process.env[key];
+    if (SENSITIVE.test(key)) {
+      val = '[REDACTED]';
+    } else if (key === 'PATH') {
+      val = val.length > 80 ? val.substring(0, 80) + '...' : val;
     }
+    envTable.push([
+      Theme.primary(key),
+      SENSITIVE.test(key) ? Theme.warning(val) : Theme.dim(val)
+    ]);
   }
-
-  if (hasEnv) {
-    output += '\n' + Theme.primary.bold('>> ENVIRONMENT (SELECTED)') + '\n';
-    output += envTable.toString() + '\n';
-    output += Theme.dim('Sensitive keys are automatically redacted.') + '\n';
-  }
+  output += Theme.primary.bold('>> ENVIRONMENT (SELECTED)') + '\n';
+  output += envTable.toString() + '\n';
+  output += Theme.dim('  Sensitive keys are automatically redacted.') + '\n';
 
   return output;
 }

@@ -62,11 +62,11 @@ export class AsyncCollectors {
     } else if (process.platform === 'linux') {
       try {
         const raw = fs.readFileSync('/proc/net/dev', 'utf8');
-        const lines = raw.split('\\n').slice(2).filter(l => l.trim());
+        const lines = raw.split('\n').slice(2).filter(l => l.trim());
         let rx = 0, tx = 0;
         for (const line of lines) {
-          const parts = line.trim().split(/\\s+/);
-          if (parts[0].startsWith('lo:')) continue;
+          const parts = line.trim().split(/\s+/);
+          if (parts[0] && parts[0].startsWith('lo:')) continue;
           rx += parseInt(parts[1], 10) || 0;
           tx += parseInt(parts[9], 10) || 0;
         }
@@ -84,13 +84,12 @@ export class AsyncCollectors {
       exec('netstat -ibn', (err, stdout) => {
         if (err) return;
         let rx = 0, tx = 0;
-        const lines = stdout.split('\\n').slice(1).filter(l => l.trim());
-        for (const line of lines) {
-          const parts = line.trim().split(/\\s+/);
-          if (!parts[0] || parts[0] === 'Name') continue;
-          rx += parseInt(parts[6], 10) || 0;
-          tx += parseInt(parts[9], 10) || 0;
-        }
+        stdout.split('\n').slice(1).filter(l => l.trim()).forEach(line => {
+          const p = line.trim().split(/\s+/);
+          if (!p[0] || p[0] === 'Name') return;
+          rx += parseInt(p[6], 10) || 0;
+          tx += parseInt(p[9], 10) || 0;
+        });
         if (this.networkSpeeds.rx > 0) {
           this.networkSpeeds.rxSpeed = Math.max(0, rx - this.networkSpeeds.rx);
           this.networkSpeeds.txSpeed = Math.max(0, tx - this.networkSpeeds.tx);

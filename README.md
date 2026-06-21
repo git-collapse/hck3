@@ -7,6 +7,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Cross--Platform-lightgrey.svg)
 ![Status](https://img.shields.io/badge/Status-Stable-success.svg)
 ![Dependencies](https://img.shields.io/badge/Dependencies-Minimal-orange.svg)
+![Tests](https://img.shields.io/badge/Tests-28%20Passing-success.svg)
 
 **A professional, offline, and secure developer diagnostic suite.**  
 SysProbe Pro transforms your local telemetry and project metadata into beautifully rendered terminal dashboards, automated system doctor reports, and actionable AI-driven advice—all without relying on cloud APIs or bloated native modules.
@@ -22,8 +23,8 @@ SysProbe Pro is packed with powerful modules designed for performance, security,
 | Feature | Description |
 | :--- | :--- |
 | **System Information** | Gathers comprehensive OS, Node.js, network, CPU, and memory telemetry. |
-| **Environment Analysis** | Inspects local variables and critical environment setups safely. |
-| **CRUD Operations** | A sandboxed filesystem manager built directly into the CLI. |
+| **Environment Analysis** | real interactive implementation |
+| **CRUD Operations** | real interactive implementation |
 | **Project Scanner** | Traverses local repositories to identify project types, sizes, and file metadata. |
 | **AI Advisor** | A deterministic, offline rules-engine translating raw telemetry into actionable text. |
 | **Doctor Diagnostics** | Heuristic evaluation of your system yielding a Health Grade (A+ to F). |
@@ -275,6 +276,23 @@ SysProbe Pro leverages an elite stack of lightweight, highly-optimized npm packa
 - **[cli-table3](https://www.npmjs.com/package/cli-table3)**: Generates precise Unicode tables for metrics.
 - **[fs-extra](https://www.npmjs.com/package/fs-extra)**: Supercharged file system management.
 - **Readline (Native)**: Hand-crafted ANSI escape code engine for flicker-free dashboards.
+
+---
+
+## 🧪 Tests
+
+```bash
+npm test           # run all 28 tests
+npm run test:sys   # 10 tests — SystemService collectors
+npm run test:crud  # 18 tests — CRUD operations
+```
+
+No external test runner — uses only Node.js built-in `assert`.
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `tests/system.test.js` | 10 | getGeneralInfo (keys + nodeVersion), getCpuInfo (count, arch), getMemoryInfo (total, free, usagePercent), getNetworkInfo (array, fields), getHealthSummary (score, rating), getSystemInfo (all sections) |
+| `tests/crud.test.js` | 18 | createFile (success, conflict, force, nested dirs), readFile (content+metadata, missing), updateFile (string, transform fn, backup, line counts, missing), listFiles (flat, extension filter, recursive, missing dir), deleteFile (backup, double-delete, skipBackup) |
 
 ---
 

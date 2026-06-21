@@ -106,15 +106,19 @@ export function setupCLI(pkg) {
           pass: fs.existsSync(path.join(cwd, 'package.json')) },
         { name: 'node_modules installed',
           pass: fs.existsSync(path.join(cwd, 'node_modules')) },
-        { name: `Node.js >= 18 (${process.version})`,
+        { name: `Node.js >= 18 (current: ${process.version})`,
           pass: parseInt(process.version.replace('v','').split('.')[0], 10) >= 18 },
-        { name: 'logs/ directory writable',
-          pass: (() => { try { fs.mkdirSync(path.join(cwd,'logs'),{recursive:true}); return true; } catch(e){ return false; } })() },
-        { name: 'reports/ directory writable',
-          pass: (() => { try { fs.mkdirSync(path.join(cwd,'reports'),{recursive:true}); return true; } catch(e){ return false; } })() },
+        { name: 'logs/ directory writable', pass: (() => {
+            try { fs.mkdirSync(path.join(cwd,'logs'),{recursive:true}); return true; }
+            catch(e) { return false; }
+          })() },
+        { name: 'reports/ directory writable', pass: (() => {
+            try { fs.mkdirSync(path.join(cwd,'reports'),{recursive:true}); return true; }
+            catch(e) { return false; }
+          })() },
         { name: '.gitignore present',
           pass: fs.existsSync(path.join(cwd, '.gitignore')) },
-        { name: 'No .env file exposed in root',
+        { name: 'No .env file exposed in project root',
           pass: !fs.existsSync(path.join(cwd, '.env')) },
       ];
 
@@ -125,7 +129,7 @@ export function setupCLI(pkg) {
         console.log(`  ${icon}  ${c.pass ? c.name : Theme.warning(c.name)}`);
       });
       const score = checks.filter(c => c.pass).length;
-      const scoreStr = `${score}/${checks.length} checks passed`;
+      const scoreStr = `${score}/7 checks passed`;
       console.log(`\n  Score: ${allPass ? Theme.success(scoreStr) : Theme.warning(scoreStr)}\n`);
     });
 

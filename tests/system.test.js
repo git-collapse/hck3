@@ -13,16 +13,14 @@ test('has all required keys', () => {
   const g = SystemService.getGeneralInfo();
   for (const k of ['osName','osRelease','platform','architecture',
     'hostname','currentUser','homeDirectory','cwd','nodeVersion','pid'])
-    assert.ok(k in g, `Missing: ${k}`);
+    assert.ok(k in g, `Missing key: ${k}`);
 });
-test('nodeVersion starts with v', () => {
-  assert.ok(SystemService.getGeneralInfo().nodeVersion.startsWith('v'));
-});
+test('nodeVersion starts with v', () =>
+  assert.ok(SystemService.getGeneralInfo().nodeVersion.startsWith('v')));
 
 section('SystemService.getCpuInfo');
-test('count is a positive number', () => {
-  assert.ok(SystemService.getCpuInfo().count > 0);
-});
+test('core count is positive', () =>
+  assert.ok(SystemService.getCpuInfo().count > 0));
 test('architecture is non-empty string', () => {
   const a = SystemService.getCpuInfo().architecture;
   assert.ok(typeof a === 'string' && a.length > 0);
@@ -32,31 +30,29 @@ section('SystemService.getMemoryInfo');
 test('total > 0', () => assert.ok(SystemService.getMemoryInfo().total > 0));
 test('total >= free', () => {
   const m = SystemService.getMemoryInfo();
-  assert.ok(m.total >= m.free);
+  assert.ok(m.total >= m.free, `total ${m.total} < free ${m.free}`);
 });
-test('usagePercent in [0,100]', () => {
+test('usagePercent between 0 and 100', () => {
   const p = SystemService.getMemoryInfo().usagePercent;
   assert.ok(p >= 0 && p <= 100, `Got ${p}`);
 });
 
 section('SystemService.getNetworkInfo');
-test('returns an array', () => {
-  assert.ok(Array.isArray(SystemService.getNetworkInfo()));
-});
+test('returns an array', () =>
+  assert.ok(Array.isArray(SystemService.getNetworkInfo())));
 test('each entry has required fields', () => {
   for (const n of SystemService.getNetworkInfo())
     for (const k of ['interface','family','address','internal','mac'])
-      assert.ok(k in n, `Missing field: ${k}`);
+      assert.ok(k in n, `Missing: ${k}`);
 });
 
 section('SystemService.getHealthSummary');
 test('returns score string and valid rating', () => {
-  const info = SystemService.getSystemInfo();
-  const h = SystemService.getHealthSummary(
-    info.memory, info.cpu, info.system, info.node);
+  const i = SystemService.getSystemInfo();
+  const h = SystemService.getHealthSummary(i.memory, i.cpu, i.system, i.node);
   assert.ok(typeof h.score === 'string');
   assert.ok(['Excellent','Good','Average','Needs Attention'].includes(h.rating),
-    `Bad rating: ${h.rating}`);
+    `Invalid rating: ${h.rating}`);
 });
 
 section('SystemService.getSystemInfo');
@@ -66,6 +62,5 @@ test('has all top-level sections', () => {
     assert.ok(k in all, `Missing section: ${k}`);
 });
 
-console.log(`\n  Results: \x1b[32m${passed} passed\x1b[0m, ${
-  failed > 0 ? '\x1b[31m' : ''}${failed} failed\x1b[0m\n`);
+console.log(`\n  \x1b[32m${passed} passed\x1b[0m, ${failed > 0 ? '\x1b[31m' : ''}${failed} failed\x1b[0m\n`);
 if (failed > 0) process.exit(1);

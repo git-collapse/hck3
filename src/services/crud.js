@@ -1,150 +1,211 @@
 /**
  * @file crud.js
- * @description Interactive CRUD file manager — Create, Read, Update,
- *   Delete, and List with inquirer menu, { success, data, error }
- *   result envelopes, and automatic timestamped .bak backup before
- *   any destructive operation.
+ * @description Interactive CRUD file manager.
+ *   Provides Create, Read, Update, Delete, and List operations on
+ *   code files via an inquirer-powered interactive menu.
+ *   All destructive operations write a timestamped .bak backup first.
+ *   Every operation returns { success, data, error } — never throws.
  */
-import inquirer from 'inquirer';
-import { Theme, Logger } from '../utils/logger.js';
-import { CrudService } from './crudService.js';
+import fs from 'fs';
 import path from 'path';
+import inquirer from 'inquirer';
+import { Logger, Theme } from '../utils/logger.js';
+import { formatBytes } from '../utils/formatter.js';
 
-export default async function startCrud() {
-  console.log('\n' + Theme.secondary.bold('=== INTERACTIVE FILE MANAGER ===') + '\n');
-  
-  let exit = false;
-  while (!exit) {
-    const { action } = await inquirer.prompt([
-      {
-        type: 'select',
-        name: 'action',
-        message: 'Select an operation:',
-        choices: [
-          'Create a file',
-          'Read a file',
-          'Update a file',
-          'Delete a file',
-          'List directory files',
-          new inquirer.Separator(),
-          'Exit'
-        ]
+function ok(data) { return { success: true, data, error: null }; }
+function fail(err) { return { success: false, data: null, error: err instanceof Error ? err.message : String(err) }; }
+
+function makeBackup(absPath) {
+  if (!fs.existsSync(absPath)) return null;
+  const ext = path.extname(absPath);
+  const base = path.basename(absPath, ext);
+  const dir = path.dirname(absPath);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const dest = path.join(dir, `${base}.${ts}${ext}.bak`);
+  fs.copyFileSync(absPath, dest);
+  return dest;
+}
+
+export function createFile(filePath, content = '', options = {}) {
+  try {
+    const abs = path.resolve(filePath);
+    if (fs.existsSync(abs) && !options.force)
+      return fail(`File already exists: ${abs}. Use { force: true } to overwrite.`);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content, 'utf8');
+    const stat = fs.statSync(abs);
+    return ok({ operation: 'CREATE', path: abs, sizeBytes: stat.size,
+      lines: content.split('\n').length, createdAt: stat.birthtime.toISOString() });
+  } catch (err) { return fail(err); }
+}
+
+export function readFile(filePath) {
+  try {
+    const abs = path.resolve(filePath);
+    if (!fs.existsSync(abs)) return fail(`File not found: ${abs}`);
+    if (!fs.statSync(abs).isFile()) return fail(`Not a file: ${abs}`);
+    const content = fs.readFileSync(abs, 'utf8');
+    const stat = fs.statSync(abs);
+    return ok({ operation: 'READ', path: abs, content, sizeBytes: stat.size,
+      lines: content.split('\n').length, extension: path.extname(abs) || '(none)',
+      lastModified: stat.mtime.toISOString(), createdAt: stat.birthtime.toISOString() });
+  } catch (err) { return fail(err); }
+}
+
+export function updateFile(filePath, contentOrFn) {
+  try {
+    const abs = path.resolve(filePath);
+    if (!fs.existsSync(abs)) return fail(`File not found: ${abs}`);
+    const oldContent = fs.readFileSync(abs, 'utf8');
+    const newContent = typeof contentOrFn === 'function'
+      ? contentOrFn(oldContent) : contentOrFn;
+    if (typeof newContent !== 'string')
+      return fail('Content must be a string or transform must return a string.');
+    const backedUpTo = makeBackup(abs);
+    fs.writeFileSync(abs, newContent, 'utf8');
+    const stat = fs.statSync(abs);
+    return ok({ operation: 'UPDATE', path: abs, backedUpTo,
+      previousLines: oldContent.split('\n').length,
+      newLines: newContent.split('\n').length,
+      sizeBytes: stat.size, updatedAt: stat.mtime.toISOString() });
+  } catch (err) { return fail(err); }
+}
+
+export function deleteFile(filePath, options = {}) {
+  try {
+    const abs = path.resolve(filePath);
+    if (!fs.existsSync(abs)) return fail(`File not found: ${abs}`);
+    if (!fs.statSync(abs).isFile()) return fail(`Not a file: ${abs}`);
+    const backedUpTo = options.skipBackup ? null : makeBackup(abs);
+    fs.unlinkSync(abs);
+    return ok({ operation: 'DELETE', path: abs, backedUpTo,
+      deletedAt: new Date().toISOString() });
+  } catch (err) { return fail(err); }
+}
+
+export function listFiles(dirPath, options = {}) {
+  try {
+    const abs = path.resolve(dirPath);
+    if (!fs.existsSync(abs)) return fail(`Directory not found: ${abs}`);
+    if (!fs.statSync(abs).isDirectory()) return fail(`Not a directory: ${abs}`);
+    function walk(dir) {
+      const files = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory() && options.recursive) files.push(...walk(full));
+        else if (entry.isFile()) {
+          if (!options.extension || path.extname(entry.name) === options.extension) {
+            const stat = fs.statSync(full);
+            files.push({ name: entry.name, path: full, sizeBytes: stat.size,
+              extension: path.extname(entry.name) || '(none)',
+              lastModified: stat.mtime.toISOString() });
+          }
+        }
       }
-    ]);
-
-    switch (action) {
-      case 'Create a file':
-        await handleCreate();
-        break;
-      case 'Read a file':
-        await handleRead();
-        break;
-      case 'Update a file':
-        await handleUpdate();
-        break;
-      case 'Delete a file':
-        await handleDelete();
-        break;
-      case 'List directory files':
-        await handleList();
-        break;
-      case 'Exit':
-        exit = true;
-        console.log(Theme.success('Exiting interactive manager. Goodbye!'));
-        break;
+      return files;
     }
-  }
+    const files = walk(abs);
+    return ok({ operation: 'LIST', directory: abs, totalFiles: files.length, files });
+  } catch (err) { return fail(err); }
 }
 
-async function handleCreate() {
-  const ans = await inquirer.prompt([
-    { type: 'input', name: 'filePath', message: 'Enter file path:' },
-    { type: 'input', name: 'content', message: 'Enter file content:' },
-    { type: 'confirm', name: 'force', message: 'Overwrite if exists?', default: false }
-  ]);
-
-  Logger.startSpinner('Creating file...');
-  const res = await CrudService.create(path.resolve(ans.filePath), ans.content, ans.force);
-  if (res.success) {
-    Logger.stopSpinner(true, `File created at ${res.data.path}`);
-  } else {
-    Logger.stopSpinner(false, `Failed to create file: ${res.error}`);
-  }
-}
-
-async function handleRead() {
-  const { filePath } = await inquirer.prompt([
-    { type: 'input', name: 'filePath', message: 'Enter file path to read:' }
-  ]);
-
-  Logger.startSpinner('Reading file...');
-  const res = await CrudService.read(path.resolve(filePath));
-  if (res.success) {
-    Logger.stopSpinner(true, 'File read successfully.\n');
-    console.log(Theme.primary.bold(`>> Metadata:`));
-    console.log(`Size: ${res.data.metadata.sizeBytes} bytes`);
-    console.log(`Lines: ${res.data.metadata.lines}`);
-    console.log(`Extension: ${res.data.metadata.extension || 'None'}`);
-    console.log(`Created: ${res.data.metadata.created}`);
-    console.log(`Modified: ${res.data.metadata.modified}`);
-    console.log(Theme.primary.bold(`\n>> Content:`));
-    console.log(Theme.secondary(res.data.content) + '\n');
-  } else {
-    Logger.stopSpinner(false, `Failed to read file: ${res.error}`);
-  }
-}
-
-async function handleUpdate() {
-  const { filePath, newContent } = await inquirer.prompt([
-    { type: 'input', name: 'filePath', message: 'Enter file path to update:' },
-    { type: 'input', name: 'newContent', message: 'Enter entirely new content:' }
-  ]);
-
-  Logger.startSpinner('Updating file...');
-  const res = await CrudService.update(path.resolve(filePath), newContent);
-  if (res.success) {
-    Logger.stopSpinner(true, `File updated. Backup created at ${res.data.backupPath}`);
-  } else {
-    Logger.stopSpinner(false, `Failed to update file: ${res.error}`);
-  }
-}
-
-async function handleDelete() {
-  const { filePath, skipBackup } = await inquirer.prompt([
-    { type: 'input', name: 'filePath', message: 'Enter file path to delete:' },
-    { type: 'confirm', name: 'skipBackup', message: 'Skip creating a backup before deletion?', default: false }
-  ]);
-
-  Logger.startSpinner('Deleting file...');
-  const res = await CrudService.delete(path.resolve(filePath), skipBackup);
-  if (res.success) {
-    if (res.data.backupPath) {
-      Logger.stopSpinner(true, `File deleted. Backup saved at ${res.data.backupPath}`);
+function printResult(result) {
+  if (!result.success) { Logger.error(result.error); return; }
+  const d = result.data;
+  console.log('\n' + Theme.success(`  ✔  ${d.operation}`) + '  ' + Theme.dim(d.path || d.directory || ''));
+  for (const [k, v] of Object.entries(d)) {
+    if (k === 'operation') continue;
+    if (k === 'content') {
+      console.log('\n' + Theme.primary.bold('  ── File Content ──'));
+      v.split('\n').forEach((l, i) =>
+        console.log(Theme.dim(`  ${String(i+1).padStart(4)}  `) + l));
+    } else if (k === 'files' && Array.isArray(v)) {
+      console.log('\n' + Theme.primary.bold(`  ── Files (${d.totalFiles}) ──`));
+      v.forEach(f => console.log(
+        `  ${Theme.success(f.name.padEnd(30))}  ${Theme.dim(formatBytes(f.sizeBytes))}  ${Theme.dim(f.lastModified)}`
+      ));
     } else {
-      Logger.stopSpinner(true, `File deleted permanently (No backup).`);
+      console.log(`  ${Theme.primary(String(k).padEnd(20))}  ${typeof v === 'object' ? JSON.stringify(v) : v}`);
     }
-  } else {
-    Logger.stopSpinner(false, `Failed to delete file: ${res.error}`);
   }
+  console.log();
 }
 
-async function handleList() {
-  const ans = await inquirer.prompt([
-    { type: 'input', name: 'dirPath', message: 'Enter directory path (e.g. ./src):', default: './' },
-    { type: 'confirm', name: 'recursive', message: 'Recursive search?', default: false },
-    { type: 'input', name: 'extFilter', message: 'Extension filter (e.g. .js) [leave blank for all]:' }
-  ]);
+export default async function runCRUD() {
+  console.log('\n' + Theme.secondary.bold('=== FILE CRUD MANAGER ==='));
+  console.log(Theme.dim('  Destructive operations auto-backup before modifying.\n'));
 
-  const ext = ans.extFilter.trim() === '' ? null : ans.extFilter.trim();
+  let running = true;
+  while (running) {
+    const { action } = await inquirer.prompt([{
+      type: 'list', name: 'action',
+      message: Theme.primary('Select an operation:'),
+      choices: [
+        { name: '📄  CREATE  — write a new code file',            value: 'create' },
+        { name: '📖  READ    — view file content + metadata',     value: 'read'   },
+        { name: '✏️   UPDATE  — overwrite or transform a file',    value: 'update' },
+        { name: '🗑️   DELETE  — remove file (auto-backed up)',     value: 'delete' },
+        { name: '📁  LIST    — list files in a directory',        value: 'list'   },
+        new inquirer.Separator(),
+        { name: '← Exit',                                         value: 'exit'   },
+      ]
+    }]);
 
-  Logger.startSpinner('Listing directory...');
-  const res = await CrudService.list(path.resolve(ans.dirPath), ans.recursive, ext);
-  
-  if (res.success) {
-    Logger.stopSpinner(true, `Found ${res.data.files.length} matching files.\n`);
-    res.data.files.forEach(f => console.log(Theme.secondary(`- ${f}`)));
-    console.log();
-  } else {
-    Logger.stopSpinner(false, `Failed to list directory: ${res.error}`);
+    if (action === 'exit') { running = false; break; }
+
+    if (action === 'create') {
+      const { filePath, content } = await inquirer.prompt([
+        { type: 'input', name: 'filePath',
+          message: 'File path to create:', default: './output/new-file.js' },
+        { type: 'editor', name: 'content', message: 'File content (opens editor):' }
+      ]);
+      printResult(createFile(filePath, content));
+
+    } else if (action === 'read') {
+      const { filePath } = await inquirer.prompt([
+        { type: 'input', name: 'filePath', message: 'File path to read:' }
+      ]);
+      printResult(readFile(filePath));
+
+    } else if (action === 'update') {
+      const { filePath } = await inquirer.prompt([
+        { type: 'input', name: 'filePath', message: 'File path to update:' }
+      ]);
+      const existing = readFile(filePath);
+      if (!existing.success) { printResult(existing); continue; }
+      console.log('\n' + Theme.dim('Current content preview (first 10 lines):'));
+      existing.data.content.split('\n').slice(0, 10)
+        .forEach((l, i) => console.log(Theme.dim(`  ${i+1}  ${l}`)));
+      if (existing.data.lines > 10)
+        console.log(Theme.dim(`  ... (${existing.data.lines - 10} more lines)`));
+      const { newContent } = await inquirer.prompt([{
+        type: 'editor', name: 'newContent',
+        message: 'New content (opens editor):',
+        default: existing.data.content
+      }]);
+      printResult(updateFile(filePath, newContent));
+
+    } else if (action === 'delete') {
+      const { filePath } = await inquirer.prompt([
+        { type: 'input', name: 'filePath', message: 'File path to delete:' }
+      ]);
+      const { confirmed } = await inquirer.prompt([{
+        type: 'confirm', name: 'confirmed',
+        message: Theme.warning(`Delete "${filePath}"? (a .bak backup is created first)`),
+        default: false
+      }]);
+      if (confirmed) printResult(deleteFile(filePath));
+      else console.log(Theme.dim('\n  Cancelled.\n'));
+
+    } else if (action === 'list') {
+      const { dirPath, recursive, ext } = await inquirer.prompt([
+        { type: 'input', name: 'dirPath', message: 'Directory to list:', default: '.' },
+        { type: 'confirm', name: 'recursive', message: 'List recursively?', default: false },
+        { type: 'input', name: 'ext',
+          message: 'Filter by extension (e.g. .js) or leave blank:', default: '' }
+      ]);
+      printResult(listFiles(dirPath, { recursive, extension: ext.trim() || undefined }));
+    }
   }
+  Logger.success('CRUD session ended.');
 }

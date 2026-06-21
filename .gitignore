@@ -1,7 +1,7 @@
 node_modules/
 .env
 
-# Generated outputs — never commit these
+# Generated outputs
 reports/
 output/
 logs/
