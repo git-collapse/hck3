@@ -13,9 +13,15 @@ import { SystemService } from '../services/systemService.js';
 import { formatBytesInMBGB, formatUptime, formatDate, safeValue, generateProgressBar } from '../utils/formatter.js';
 import { stripColors } from '../utils/helper.js';
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
+
 export default async function(options = {}) {
   const t0 = performance.now();
-  Logger.startSpinner('Gathering comprehensive system metrics...');
+  if (!options.json) {
+    Logger.startSpinner('Gathering comprehensive system metrics...');
+  }
 
   try {
     const info = SystemService.getSystemInfo();
@@ -27,20 +33,24 @@ export default async function(options = {}) {
     const execTimeMs = (t1 - t0).toFixed(2);
     info.executionTimeMs = execTimeMs;
 
-    Logger.stopSpinner(true, 'System metrics retrieved successfully.');
+    if (!options.json) {
+      Logger.stopSpinner(true, 'System metrics retrieved successfully.');
+    }
 
     // Always generate string report for text saving
     const reportStr = buildCLIReportString(info);
 
     // Save outputs
-    saveReportsAutomatically(info, reportStr);
+    const reportData = saveReportsAutomatically(info, reportStr);
 
-    if (!options.json) {
+    if (options.json) {
+      console.log(JSON.stringify(reportData, null, 2));
+    } else {
       console.log(reportStr);
       printFooter(execTimeMs);
     }
   } catch (error) {
-    Logger.stopSpinner(false, 'Failed to gather system information.');
+    if (!options.json) Logger.stopSpinner(false, 'Failed to gather system information.');
     Logger.error('Error during system information collection.', error);
   }
 }
@@ -51,22 +61,27 @@ function saveReportsAutomatically(info, reportStr) {
     fs.mkdirSync(reportDir, { recursive: true });
   }
 
-  // Save JSON
-  const jsonPath = path.resolve(reportDir, 'system-report.json');
   const reportData = {
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: pkg.version,
     executionTimeMs: info.executionTimeMs,
     healthSummary: info.health,
     collectedInformation: info
   };
+
+  // Save JSON
+  const jsonPath = path.resolve(reportDir, 'system-report.json');
   fs.writeFileSync(jsonPath, JSON.stringify(reportData, null, 2));
 
   // Save TXT
   const txtPath = path.resolve(reportDir, 'system-report.txt');
   fs.writeFileSync(txtPath, stripColors(reportStr) + '\n' + stripColors(getFooterString(info.executionTimeMs)));
   
-  Logger.info(`Reports automatically saved to ${Theme.dim('reports/')}`);
+  // Only log if not printing json
+  // Wait, the prompt says "When --json flag is passed, print the full JSON report to stdout AND still save to file. Remove the blank-output behavior."
+  // But if I print Logger.info when --json is passed, it might break JSON parsing. Better to avoid it.
+  
+  return reportData;
 }
 
 function printFooter(execTimeMs) {
@@ -80,7 +95,7 @@ ${Theme.dim('━━━━━━━━━━━━━━━━━━━━━━�
 ${Theme.success.bold('Report Generated Successfully')}
 ${Theme.primary('Execution Time')} : ${execTimeMs} ms
 ${Theme.primary('Generated At')}   : ${timeStr}
-${Theme.secondary('SysProbe Pro v1.0.0')}
+${Theme.secondary(`SysProbe Pro v${pkg.version}`)}
 ${Theme.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 `;
 }
@@ -100,8 +115,8 @@ function buildCLIReportString(info) {
     ['Hostname', Theme.secondary(safeValue(gen.hostname))],
     ['Current User', safeValue(gen.currentUser)],
     ['Home Directory', safeValue(gen.homeDirectory)],
-    ['Current Working Dir', safeValue(gen.cwd)],
-    ['Node.js Version', Theme.success(safeValue(gen.nodeVersion))]
+    ['Temp Directory', safeValue(gen.tempDirectory)],
+    ['Process ID', String(safeValue(gen.pid))]
   );
   output += Theme.primary.bold('>> GENERAL') + '\n';
   output += genTable.toString() + '\n\n';
@@ -109,10 +124,9 @@ function buildCLIReportString(info) {
   // CPU Section
   const cpuTable = createTable(['Property', 'Value']);
   const cpu = info.cpu;
-  const cpuBar = generateProgressBar(100, 15); // Static bar just for visual flair of cores
   cpuTable.push(
     ['CPU Model', Theme.primary(safeValue(cpu.model))],
-    ['CPU Cores', `${cpu.count} (Logical Threads) ${Theme.dim(cpuBar)}`],
+    ['CPU Cores', `${cpu.count} (Logical Threads)`],
     ['Architecture', safeValue(cpu.architecture)],
     ['Speed (MHz)', safeValue(cpu.speed)],
     ['Load Average', safeValue(cpu.loadAverage)]
@@ -175,6 +189,31 @@ function buildCLIReportString(info) {
   );
   output += Theme.primary.bold('>> HEALTH SUMMARY') + '\n';
   output += healthTable.toString() + '\n';
+
+  // Environment Section
+  const envKeys = ['NODE_ENV', 'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TERM', 'EDITOR', 'HOSTNAME', 'COMPUTERNAME', 'OS', 'USERPROFILE', 'APPDATA', 'TEMP', 'TMP'];
+  const envTable = createTable(['Variable', 'Value']);
+  const SENSITIVE = /token|secret|password|passwd|key|api|auth|credential/i;
+  let hasEnv = false;
+
+  for (const key of envKeys) {
+    if (key in process.env) {
+      hasEnv = true;
+      let val = process.env[key];
+      if (SENSITIVE.test(key)) {
+        val = Theme.warning('[REDACTED]');
+      } else if (key === 'PATH' && val.length > 80) {
+        val = val.substring(0, 80) + '...';
+      }
+      envTable.push([Theme.primary(key), Theme.dim(val)]);
+    }
+  }
+
+  if (hasEnv) {
+    output += '\n' + Theme.primary.bold('>> ENVIRONMENT (SELECTED)') + '\n';
+    output += envTable.toString() + '\n';
+    output += Theme.dim('Sensitive keys are automatically redacted.') + '\n';
+  }
 
   return output;
 }

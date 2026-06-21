@@ -1,4 +1,8 @@
 node_modules/
-logs/
 .env
+
+# Generated outputs — never commit these
 reports/
+output/
+logs/
+*.bak

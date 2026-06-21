@@ -31,31 +31,75 @@ export class AsyncCollectors {
   }
 
   pollNetwork() {
+    const handleStats = (rx, tx) => {
+      if (this.networkSpeeds.rx > 0) {
+        this.networkSpeeds.rxSpeed = rx - this.networkSpeeds.rx;
+        this.networkSpeeds.txSpeed = tx - this.networkSpeeds.tx;
+      }
+      this.networkSpeeds.rx = rx;
+      this.networkSpeeds.tx = tx;
+    };
+
+    const fallback = () => {
+      this.networkSpeeds.rxSpeed = 0;
+      this.networkSpeeds.txSpeed = 0;
+    };
+
     if (process.platform === 'win32') {
       exec('netstat -e', (err, stdout) => {
         if (!err) {
-          const lines = stdout.split('\n');
+          const lines = stdout.split('\\n');
           for (const line of lines) {
             if (line.trim().startsWith('Bytes')) {
-              const parts = line.trim().split(/\s+/);
+              const parts = line.trim().split(/\\s+/);
               if (parts.length >= 3) {
-                const rx = parseInt(parts[1], 10);
-                const tx = parseInt(parts[2], 10);
-                if (this.networkSpeeds.rx > 0) {
-                  this.networkSpeeds.rxSpeed = rx - this.networkSpeeds.rx;
-                  this.networkSpeeds.txSpeed = tx - this.networkSpeeds.tx;
-                }
-                this.networkSpeeds.rx = rx;
-                this.networkSpeeds.tx = tx;
+                handleStats(parseInt(parts[1], 10) || 0, parseInt(parts[2], 10) || 0);
               }
             }
           }
+        } else fallback();
+      });
+    } else if (process.platform === 'linux') {
+      try {
+        const raw = fs.readFileSync('/proc/net/dev', 'utf8');
+        const lines = raw.split('\\n').slice(2).filter(l => l.trim());
+        let rx = 0, tx = 0;
+        for (const line of lines) {
+          const parts = line.trim().split(/\\s+/);
+          if (parts[0].startsWith('lo:')) continue;
+          rx += parseInt(parts[1], 10) || 0;
+          tx += parseInt(parts[9], 10) || 0;
         }
+        if (this.networkSpeeds.rx > 0) {
+          this.networkSpeeds.rxSpeed = Math.max(0, rx - this.networkSpeeds.rx);
+          this.networkSpeeds.txSpeed = Math.max(0, tx - this.networkSpeeds.tx);
+        }
+        this.networkSpeeds.rx = rx;
+        this.networkSpeeds.tx = tx;
+      } catch(e) {
+        this.networkSpeeds.rxSpeed = 0;
+        this.networkSpeeds.txSpeed = 0;
+      }
+    } else if (process.platform === 'darwin') {
+      exec('netstat -ibn', (err, stdout) => {
+        if (err) return;
+        let rx = 0, tx = 0;
+        const lines = stdout.split('\\n').slice(1).filter(l => l.trim());
+        for (const line of lines) {
+          const parts = line.trim().split(/\\s+/);
+          if (!parts[0] || parts[0] === 'Name') continue;
+          rx += parseInt(parts[6], 10) || 0;
+          tx += parseInt(parts[9], 10) || 0;
+        }
+        if (this.networkSpeeds.rx > 0) {
+          this.networkSpeeds.rxSpeed = Math.max(0, rx - this.networkSpeeds.rx);
+          this.networkSpeeds.txSpeed = Math.max(0, tx - this.networkSpeeds.tx);
+        }
+        this.networkSpeeds.rx = rx;
+        this.networkSpeeds.tx = tx;
       });
     } else {
-      // Basic mock for unsupported native network speed mapping
-      this.networkSpeeds.rxSpeed = 0;
-      this.networkSpeeds.txSpeed = 0;
+      fallback();
     }
   }
 

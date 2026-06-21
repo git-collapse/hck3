@@ -1,53 +1,94 @@
+/**
+ * @file environment.js
+ * @description Environment Variable Inspector — displays all environment
+ *   variables safely with automatic sensitive-key redaction and
+ *   PATH duplicate detection.
+ */
 import Table from 'cli-table3';
+import path from 'path';
 import { Logger, Theme } from '../utils/logger.js';
 
-export default async function() {
-  Logger.startSpinner('Scanning environment variables...');
-  
-  // Simulate slight delay for UX
-  await new Promise(res => setTimeout(res, 300));
-  
-  Logger.stopSpinner(true, 'Environment scan complete.');
+const SENSITIVE = /token|secret|password|passwd|key|api|auth|credential/i;
 
-  const table = new Table({
-    head: [Theme.secondary.bold('Variable'), Theme.secondary.bold('Value')],
-    style: {
-      head: [],
-      border: ['gray']
-    },
-    chars: {
-      'top': '═', 'top-mid': '╤', 'top-left': '╔', 'top-right': '╗',
-      'bottom': '═', 'bottom-mid': '╧', 'bottom-left': '╚', 'bottom-right': '╝',
-      'left': '║', 'left-mid': '╟', 'mid': '─', 'mid-mid': '┼',
-      'right': '║', 'right-mid': '╢', 'middle': '│'
-    }
-  });
+const PRIORITY_KEYS = [
+  'NODE_ENV','PATH','HOME','USER','SHELL','LANG','TERM','EDITOR',
+  'LOGNAME','HOSTNAME','COMPUTERNAME','OS','USERPROFILE','APPDATA',
+  'WINDIR','TEMP','TMP','npm_config_prefix','NODE_PATH'
+];
 
-  const redactionRegex = /token|secret|password|passwd|key|api|auth|credential/i;
+export default async function showEnvironment() {
+  Logger.startSpinner('Inspecting environment variables safely...');
+  try {
+    const env = process.env;
+    const rows = [];
 
-  const envKeys = Object.keys(process.env).sort();
-  
-  let redactedCount = 0;
-
-  for (const key of envKeys) {
-    let value = process.env[key];
-    
-    if (redactionRegex.test(key)) {
-      value = Theme.error('[REDACTED]');
-      redactedCount++;
-    } else {
-      // Truncate massively long variables (e.g. LS_COLORS) to keep table clean
-      if (value.length > 80) {
-        value = value.substring(0, 77) + '...';
+    for (const key of PRIORITY_KEYS) {
+      if (key in env) {
+        rows.push({
+          key,
+          value: SENSITIVE.test(key) ? '[REDACTED]' : env[key],
+          priority: true
+        });
       }
-      value = Theme.primary(value);
+    }
+    for (const key of Object.keys(env).sort()) {
+      if (PRIORITY_KEYS.includes(key)) continue;
+      rows.push({
+        key,
+        value: SENSITIVE.test(key) ? '[REDACTED]' : env[key],
+        priority: false
+      });
     }
 
-    table.push([Theme.primary.bold(key), value]);
-  }
+    const pathVal = env.PATH || env.Path || '';
+    const pathEntries = pathVal.split(path.delimiter).filter(Boolean);
+    const uniquePaths = new Set(pathEntries);
+    const hasDuplicates = pathEntries.length > uniquePaths.size;
 
-  console.log('\n' + Theme.secondary.bold('=== ENVIRONMENT VARIABLES ===') + '\n');
-  console.log(table.toString());
-  console.log(`\n${Theme.success(`✔ Displayed ${envKeys.length} environment variables.`)}`);
-  console.log(`${Theme.warning(`⚠ Safely redacted ${redactedCount} sensitive variables.`)}\n`);
+    Logger.stopSpinner(true, `${rows.length} environment variables inspected.`);
+
+    console.log('\n' + Theme.secondary.bold('=== ENVIRONMENT VARIABLE INSPECTOR ===') + '\n');
+    console.log(Theme.primary.bold('>> SUMMARY'));
+    console.log(`  ${Theme.success('Total Variables')}  : ${rows.length}`);
+    console.log(`  ${Theme.success('Redacted Keys')}    : ${rows.filter(r => r.value === '[REDACTED]').length}`);
+    console.log(`  ${Theme.success('PATH Entries')}     : ${pathEntries.length} (${hasDuplicates ? Theme.warning('⚠ duplicates found') : Theme.success('✔ clean')})`);
+    console.log(`  ${Theme.success('NODE_ENV')}         : ${env.NODE_ENV ? Theme.success(env.NODE_ENV) : Theme.warning('not set')}\n`);
+
+    const table = new Table({
+      head: [Theme.secondary.bold('Variable'), Theme.secondary.bold('Value')],
+      style: { head: [], border: ['gray'] },
+      colWidths: [30, 70],
+      wordWrap: true,
+      chars: {
+        'top':'═','top-mid':'╤','top-left':'╔','top-right':'╗',
+        'bottom':'═','bottom-mid':'╧','bottom-left':'╚','bottom-right':'╝',
+        'left':'║','left-mid':'╟','mid':'─','mid-mid':'┼',
+        'right':'║','right-mid':'╢','middle':'│'
+      }
+    });
+
+    for (const row of rows) {
+      const keyStr = row.priority ? Theme.primary(row.key) : row.key;
+      const valStr = row.value === '[REDACTED]'
+        ? Theme.warning('[REDACTED]')
+        : Theme.dim(String(row.value).substring(0, 68));
+      table.push([keyStr, valStr]);
+    }
+
+    console.log(Theme.primary.bold('>> ALL ENVIRONMENT VARIABLES'));
+    console.log(table.toString());
+
+    if (hasDuplicates) {
+      console.log('\n' + Theme.warning('⚠  Duplicate PATH entries detected:'));
+      const seen = new Set();
+      pathEntries.forEach(p => {
+        if (seen.has(p)) console.log(Theme.dim(`   Duplicate: ${p}`));
+        seen.add(p);
+      });
+    }
+    console.log('\n' + Theme.dim('  Sensitive keys are automatically redacted.') + '\n');
+  } catch (err) {
+    Logger.stopSpinner(false, 'Environment inspection failed.');
+    Logger.error('Failed to inspect environment.', err);
+  }
 }

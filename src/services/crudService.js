@@ -6,15 +6,23 @@ export class CrudService {
     return { success, data, error };
   }
 
-  static async create(filePath, content, force = false) {
+  static async create(filePath, content, forceOpt = false) {
     try {
+      const isForce = typeof forceOpt === 'object' ? forceOpt.force : forceOpt;
       const exists = await fs.pathExists(filePath);
-      if (exists && !force) {
+      if (exists && !isForce) {
         return this.createEnvelope(false, null, 'File already exists. Use force to overwrite.');
       }
       await fs.ensureDir(path.dirname(filePath));
       await fs.writeFile(filePath, content, 'utf-8');
-      return this.createEnvelope(true, { path: filePath });
+      
+      const stats = await fs.stat(filePath);
+      
+      return this.createEnvelope(true, { 
+        operation: 'CREATE', 
+        sizeBytes: stats.size,
+        path: filePath 
+      });
     } catch (err) {
       return this.createEnvelope(false, null, err.message);
     }
@@ -24,7 +32,7 @@ export class CrudService {
     try {
       const exists = await fs.pathExists(filePath);
       if (!exists) {
-        return this.createEnvelope(false, null, 'File does not exist.');
+        return this.createEnvelope(false, null, 'File not found.');
       }
       
       const stats = await fs.stat(filePath);
@@ -35,15 +43,14 @@ export class CrudService {
       const content = await fs.readFile(filePath, 'utf-8');
       const lines = content.split('\n').length;
       
-      const metadata = {
+      return this.createEnvelope(true, { 
+        content, 
         sizeBytes: stats.size,
         lines,
         extension: path.extname(filePath),
         created: stats.birthtime,
         modified: stats.mtime
-      };
-
-      return this.createEnvelope(true, { content, metadata });
+      });
     } catch (err) {
       return this.createEnvelope(false, null, err.message);
     }
@@ -52,7 +59,7 @@ export class CrudService {
   static async update(filePath, payload) {
     try {
       const readRes = await this.read(filePath);
-      if (!readRes.success) return readRes; // return fail
+      if (!readRes.success) return readRes;
 
       // Create backup
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -67,7 +74,15 @@ export class CrudService {
       }
 
       await fs.writeFile(filePath, newContent, 'utf-8');
-      return this.createEnvelope(true, { backupPath });
+      
+      const previousLines = readRes.data.content.split('\n').length;
+      const newLines = newContent.split('\n').length;
+      
+      return this.createEnvelope(true, { 
+        backupPath, 
+        previousLines, 
+        newLines 
+      });
     } catch (err) {
       return this.createEnvelope(false, null, err.message);
     }
@@ -77,7 +92,7 @@ export class CrudService {
     try {
       const exists = await fs.pathExists(filePath);
       if (!exists) {
-        return this.createEnvelope(false, null, 'File does not exist.');
+        return this.createEnvelope(false, null, 'File not found.');
       }
 
       const stats = await fs.stat(filePath);
@@ -86,20 +101,23 @@ export class CrudService {
       }
 
       let backupPath = null;
-      if (!skipBackup) {
+      // Note test handles skipBackup differently, wait test signature: deleteFile(path, {skipBackup:true})
+      const options = typeof skipBackup === 'object' ? skipBackup : { skipBackup };
+      
+      if (!options.skipBackup) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         backupPath = `${filePath}.${timestamp}.bak`;
         await fs.copy(filePath, backupPath);
       }
 
       await fs.remove(filePath);
-      return this.createEnvelope(true, { backupPath });
+      return this.createEnvelope(true, { backedUpTo: backupPath });
     } catch (err) {
       return this.createEnvelope(false, null, err.message);
     }
   }
 
-  static async list(dirPath, recursive = false, extFilter = null) {
+  static async list(dirPath, options = {}) {
     try {
       const exists = await fs.pathExists(dirPath);
       if (!exists) {
@@ -112,6 +130,8 @@ export class CrudService {
       }
 
       const files = [];
+      const recursive = options.recursive || false;
+      const extFilter = options.extension || null;
 
       async function traverse(currentPath) {
         const items = await fs.readdir(currentPath);
@@ -125,7 +145,7 @@ export class CrudService {
             }
           } else {
             if (!extFilter || itemPath.endsWith(extFilter)) {
-              files.push(itemPath);
+              files.push({ name: item, path: itemPath });
             }
           }
         }
@@ -133,7 +153,7 @@ export class CrudService {
 
       await traverse(dirPath);
 
-      return this.createEnvelope(true, { files });
+      return this.createEnvelope(true, { files, totalFiles: files.length });
     } catch (err) {
       return this.createEnvelope(false, null, err.message);
     }

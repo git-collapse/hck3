@@ -96,11 +96,37 @@ export function setupCLI(pkg) {
     .alias('h')
     .description('Check application health and dependencies')
     .action(async () => {
-      const { Logger } = await import('./utils/logger.js');
-      Logger.startSpinner('Running health checks...');
-      setTimeout(() => {
-        Logger.stopSpinner(true, 'All systems operational.');
-      }, 1000);
+      const { Logger, Theme } = await import('./utils/logger.js');
+      const fs = (await import('fs')).default;
+      const path = (await import('path')).default;
+      const cwd = process.cwd();
+
+      const checks = [
+        { name: 'package.json exists',
+          pass: fs.existsSync(path.join(cwd, 'package.json')) },
+        { name: 'node_modules installed',
+          pass: fs.existsSync(path.join(cwd, 'node_modules')) },
+        { name: `Node.js >= 18 (${process.version})`,
+          pass: parseInt(process.version.replace('v','').split('.')[0], 10) >= 18 },
+        { name: 'logs/ directory writable',
+          pass: (() => { try { fs.mkdirSync(path.join(cwd,'logs'),{recursive:true}); return true; } catch(e){ return false; } })() },
+        { name: 'reports/ directory writable',
+          pass: (() => { try { fs.mkdirSync(path.join(cwd,'reports'),{recursive:true}); return true; } catch(e){ return false; } })() },
+        { name: '.gitignore present',
+          pass: fs.existsSync(path.join(cwd, '.gitignore')) },
+        { name: 'No .env file exposed in root',
+          pass: !fs.existsSync(path.join(cwd, '.env')) },
+      ];
+
+      const allPass = checks.every(c => c.pass);
+      console.log('\n' + Theme.secondary.bold('=== APPLICATION HEALTH CHECK ===') + '\n');
+      checks.forEach(c => {
+        const icon = c.pass ? Theme.success('✔') : Theme.error('✖');
+        console.log(`  ${icon}  ${c.pass ? c.name : Theme.warning(c.name)}`);
+      });
+      const score = checks.filter(c => c.pass).length;
+      const scoreStr = `${score}/${checks.length} checks passed`;
+      console.log(`\n  Score: ${allPass ? Theme.success(scoreStr) : Theme.warning(scoreStr)}\n`);
     });
 
   program

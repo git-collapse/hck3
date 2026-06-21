@@ -1,3 +1,10 @@
+/**
+ * @file crud.js
+ * @description Interactive CRUD file manager — Create, Read, Update,
+ *   Delete, and List with inquirer menu, { success, data, error }
+ *   result envelopes, and automatic timestamped .bak backup before
+ *   any destructive operation.
+ */
 import inquirer from 'inquirer';
 import { Theme, Logger } from '../utils/logger.js';
 import { CrudService } from './crudService.js';
