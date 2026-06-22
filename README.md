@@ -23,8 +23,8 @@ SysProbe Pro is packed with powerful modules designed for performance, security,
 | Feature | Description |
 | :--- | :--- |
 | **System Information** | Gathers comprehensive OS, Node.js, network, CPU, and memory telemetry. |
-| **Environment Analysis** | real interactive implementation |
-| **CRUD Operations** | real interactive implementation |
+| **Environment Analysis** | Safely inspects environment variables, masking sensitive keys
+| **CRUD Operations**  | Interactive file create, read, update, delete with auto-backup |
 | **Project Scanner** | Traverses local repositories to identify project types, sizes, and file metadata. |
 | **AI Advisor** | A deterministic, offline rules-engine translating raw telemetry into actionable text. |
 | **Doctor Diagnostics** | Heuristic evaluation of your system yielding a Health Grade (A+ to F). |
@@ -131,8 +131,8 @@ SysProbe Pro is engineered with the following core principles:
 Ensure you have Node.js v18+ installed on your system.
 
 ```bash
-git clone https://github.com/your-username/sysprobe-pro.git
-cd sysprobe-pro
+git clone https://github.com/git-collapse/hck3.git
+cd hck3
 npm install
 ```
 
@@ -282,9 +282,9 @@ SysProbe Pro leverages an elite stack of lightweight, highly-optimized npm packa
 ## 🧪 Tests
 
 ```bash
-npm test           # run all 28 tests
-npm run test:sys   # 10 tests — SystemService collectors
-npm run test:crud  # 18 tests — CRUD operations
+npm test           # run all 30 tests
+npm run test:sys   # 11 tests — SystemService collectors
+npm run test:crud  # 19 tests — CRUD operations
 ```
 
 No external test runner — uses only Node.js built-in `assert`.
